@@ -111,10 +111,26 @@ class LightGBMTrainer(ModelTrainer):
             ] if eval_set else None
         )
         
+        # Validate that training was successful
+        if self.model is None:
+            raise RuntimeError("Model training failed - model is None")
+        
+        if not hasattr(self.model, 'booster_') or self.model.booster_ is None:
+            logger.warning("Model booster is None - this may cause issues with feature importance")
+        
+        # Test a simple prediction to ensure model is working
+        try:
+            test_pred = self.model.predict(X_train[:1])
+            if test_pred is None or len(test_pred) == 0:
+                raise RuntimeError("Model prediction test failed")
+        except Exception as e:
+            raise RuntimeError(f"Model validation failed: {str(e)}")
+        
         self.is_trained = True
         training_time = time.time() - start_time
         
         logger.info(f"LightGBM training completed in {training_time:.2f} seconds")
+        logger.debug(f"Model validation successful - booster available: {hasattr(self.model, 'booster_') and self.model.booster_ is not None}")
         
         return self.model
     
@@ -265,10 +281,79 @@ class LightGBMTrainer(ModelTrainer):
         if importance_type not in ['gain', 'split', 'weight']:
             raise ValueError("importance_type must be one of: 'gain', 'split', 'weight'")
         
-        importance_values = self.model.feature_importances_
-        feature_names = [f"feature_{i}" for i in range(len(importance_values))]
+        # Check if model exists
+        if self.model is None:
+            logger.error("Model is None - training may have failed")
+            return {}
         
-        return dict(zip(feature_names, importance_values))
+        try:
+            importance_values = None
+            
+            # Method 1: Try LightGBM booster's feature importance (preferred)
+            if hasattr(self.model, 'booster_') and self.model.booster_ is not None:
+                try:
+                    importance_values = self.model.booster_.feature_importance(importance_type=importance_type)
+                    logger.debug(f"Successfully extracted {importance_type} importance from booster")
+                except Exception as e:
+                    logger.warning(f"Booster feature importance failed for {importance_type}: {str(e)}")
+                    importance_values = None
+            
+            # Method 2: Fallback to sklearn-style feature importance (only for 'gain' equivalent)
+            if importance_values is None and hasattr(self.model, 'feature_importances_'):
+                try:
+                    importance_values = self.model.feature_importances_
+                    logger.debug("Using sklearn-style feature_importances_")
+                except Exception as e:
+                    logger.warning(f"Sklearn feature_importances_ failed: {str(e)}")
+                    importance_values = None
+            
+            # Method 3: Try direct model method (last resort)
+            if importance_values is None:
+                try:
+                    importance_values = self.model.feature_importance(importance_type=importance_type)
+                    logger.debug(f"Using direct model.feature_importance({importance_type})")
+                except Exception as e:
+                    logger.warning(f"Direct model feature_importance failed: {str(e)}")
+                    importance_values = None
+            
+            # Check if we got valid importance values
+            if importance_values is None:
+                logger.error(f"All feature importance extraction methods failed for {importance_type}")
+                return {}
+            
+            # Validate importance values
+            if len(importance_values) == 0:
+                logger.error("Feature importance array is empty")
+                return {}
+            
+            # Check for all zeros (indicates potential training issue)
+            if np.all(importance_values == 0):
+                logger.warning("All feature importance values are zero - model may not have trained properly")
+                logger.warning("This can happen with very small datasets, constant features, or training failures")
+                
+                # Try to get alternative importance if available
+                if importance_type == 'gain' and hasattr(self.model, 'feature_importances_'):
+                    try:
+                        fallback_values = self.model.feature_importances_
+                        if not np.all(fallback_values == 0):
+                            logger.info("Using sklearn feature_importances_ as fallback")
+                            importance_values = fallback_values
+                    except Exception:
+                        pass
+            
+            # Create feature names
+            feature_names = [f"feature_{i}" for i in range(len(importance_values))]
+            
+            result = dict(zip(feature_names, importance_values))
+            logger.debug(f"Feature importance extraction successful: {len(result)} features, sum={sum(result.values()):.4f}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in feature importance extraction: {str(e)}")
+            import traceback
+            logger.debug(traceback.format_exc())
+            return {}
     
     def create_model_result(self, X_test: np.ndarray, y_test: np.ndarray,
                            training_time: float, feature_names: Optional[list] = None) -> ModelResult:

@@ -484,10 +484,23 @@ class WineInterpretabilityApp:
             test_rmse = np.sqrt(mean_squared_error(self.y_test, test_pred))
             test_r2 = r2_score(self.y_test, test_pred)
             
-            # Get feature importance if available
+            # Get feature importance using the trainer's method
             feature_importance = {}
-            if hasattr(self.trained_model, 'feature_importances_'):
-                feature_importance = dict(zip(self.feature_names, self.trained_model.feature_importances_))
+            try:
+                if hasattr(self.model_trainer, 'get_feature_importance'):
+                    importance_dict = self.model_trainer.get_feature_importance()
+                    # Map generic feature names to actual feature names
+                    feature_importance = {}
+                    for i, feature_name in enumerate(self.feature_names):
+                        generic_name = f"feature_{i}"
+                        if generic_name in importance_dict:
+                            feature_importance[feature_name] = importance_dict[generic_name]
+                elif hasattr(self.trained_model, 'feature_importances_'):
+                    # Fallback to direct access
+                    feature_importance = dict(zip(self.feature_names, self.trained_model.feature_importances_))
+            except Exception as e:
+                logger.warning(f"Could not extract feature importance: {str(e)}")
+                feature_importance = {}
             
             model_results = {
                 'model_type': self.config.model_config.model_type.value,

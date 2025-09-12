@@ -94,21 +94,24 @@ class XGBoostTrainer(ModelTrainer):
             'verbosity': 0,  # Suppress training logs
         })
         
-        # Create model
+        # Create model (don't add early_stopping_rounds to constructor)
         self.model = xgb.XGBRegressor(**params)
         
-        # Prepare validation data for early stopping
-        eval_set = None
-        if X_val is not None and y_val is not None:
-            eval_set = [(X_val, y_val)]
+        # Prepare fit parameters - use simple approach for compatibility
+        fit_params = {}
         
-        # Train model
-        self.model.fit(
-            X_train, y_train,
-            eval_set=eval_set,
-            early_stopping_rounds=self.config.early_stopping_rounds or 50,
-            verbose=False
-        )
+        if X_val is not None and y_val is not None:
+            # Just use eval_set for monitoring, skip early stopping for compatibility
+            fit_params = {
+                'eval_set': [(X_val, y_val)],
+                'verbose': False
+            }
+            logger.info("Training with validation set (early stopping disabled for compatibility)")
+        else:
+            logger.info("Training without validation set")
+        
+        # Train model with compatible parameters
+        self.model.fit(X_train, y_train, **fit_params)
         
         self.is_trained = True
         training_time = time.time() - start_time
@@ -165,12 +168,11 @@ class XGBoostTrainer(ModelTrainer):
             
             # Use validation set if provided, otherwise use cross-validation
             if X_val is not None and y_val is not None:
-                model.fit(
-                    X_train, y_train,
-                    eval_set=[(X_val, y_val)],
-                    early_stopping_rounds=self.config.early_stopping_rounds or 50,
-                    verbose=False
-                )
+                # Simple fit with validation set (no early stopping for compatibility)
+                fit_params = {'eval_set': [(X_val, y_val)], 'verbose': False}
+                
+                # Train with validation set
+                model.fit(X_train, y_train, **fit_params)
                 y_pred = model.predict(X_val)
                 score = mean_squared_error(y_val, y_pred, squared=False)  # RMSE
             else:

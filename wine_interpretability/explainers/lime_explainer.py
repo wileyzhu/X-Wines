@@ -127,7 +127,28 @@ class LIMEExplainer(BaseExplainer):
             )
             
             # Extract feature importance
-            feature_importance = dict(explanation.as_list())
+# FIXED: Use proper feature names instead of values
+            raw_explanation = explanation.as_list()
+            feature_importance = {}
+            
+            # Map LIME's feature descriptions to actual feature names
+            for i, (feature_desc, importance) in enumerate(raw_explanation):
+                if i < len(self.feature_names):
+                    # Use the actual feature name
+                    feature_name = self.feature_names[i]
+                    feature_importance[feature_name] = importance
+                else:
+                    # Fallback: parse feature name from description
+                    if ' <= ' in feature_desc:
+                        feature_name = feature_desc.split(' <= ')[0].strip()
+                    elif ' > ' in feature_desc:
+                        feature_name = feature_desc.split(' > ')[0].strip()
+                    elif '=' in feature_desc:
+                        feature_name = feature_desc.split('=')[0].strip()
+                    else:
+                        feature_name = feature_desc.strip()
+                    
+                    feature_importance[feature_name] = importance
             
             # Get prediction and confidence interval
             prediction = self._predict_fn(instance.reshape(1, -1))[0]

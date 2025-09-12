@@ -83,6 +83,99 @@ class SHAPVisualizer(BaseVisualizer):
             logger.error(f"Failed to create SHAP summary plot: {str(e)}")
             raise RuntimeError(f"SHAP summary plot creation failed: {str(e)}")
     
+    def create_enhanced_beeswarm_plot(self, explanation: SHAPExplanation, 
+                                    max_display: Optional[int] = None, **kwargs) -> plt.Figure:
+        """Create enhanced SHAP beeswarm plot with better styling.
+        
+        Args:
+            explanation: SHAP explanation object
+            max_display: Maximum number of features to display
+            **kwargs: Additional parameters for beeswarm plot
+            
+        Returns:
+            Matplotlib figure object
+        """
+        try:
+            max_display = max_display or self.config.max_display_features
+            
+            fig, ax = plt.subplots(figsize=(self.config.figure_size[0], self.config.figure_size[1] + 2))
+            
+            # Create enhanced beeswarm plot
+            shap.plots.beeswarm(
+                shap.Explanation(
+                    values=explanation.shap_values,
+                    base_values=explanation.expected_value,
+                    data=explanation.data,
+                    feature_names=explanation.feature_names
+                ),
+                max_display=max_display,
+                show=False,
+                **kwargs
+            )
+            
+            plt.title(f'Enhanced SHAP Beeswarm Plot\n{explanation.explanation_type.title()} Explanations', 
+                     fontsize=self.config.font_size + 4, fontweight='bold', pad=20)
+            plt.xlabel('SHAP Value (Impact on Model Output)', fontsize=self.config.font_size + 1)
+            
+            # Add grid for better readability
+            ax.grid(True, alpha=0.3, axis='x')
+            
+            # Improve layout
+            plt.tight_layout()
+            
+            logger.info(f"Created enhanced SHAP beeswarm plot for {explanation.explanation_type} explanation")
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Failed to create enhanced SHAP beeswarm plot: {str(e)}")
+            raise RuntimeError(f"Enhanced SHAP beeswarm plot creation failed: {str(e)}")
+    
+    def create_bar_plot(self, explanation: SHAPExplanation, 
+                       max_display: Optional[int] = None, **kwargs) -> plt.Figure:
+        """Create SHAP bar plot showing feature importance ranking.
+        
+        Args:
+            explanation: SHAP explanation object
+            max_display: Maximum number of features to display
+            **kwargs: Additional parameters for bar plot
+            
+        Returns:
+            Matplotlib figure object
+        """
+        try:
+            max_display = max_display or self.config.max_display_features
+            
+            fig, ax = plt.subplots(figsize=self.config.figure_size)
+            
+            # Create SHAP bar plot
+            shap.plots.bar(
+                shap.Explanation(
+                    values=explanation.shap_values,
+                    base_values=explanation.expected_value,
+                    data=explanation.data,
+                    feature_names=explanation.feature_names
+                ),
+                max_display=max_display,
+                show=False,
+                **kwargs
+            )
+            
+            plt.title(f'SHAP Feature Importance Ranking\n{explanation.explanation_type.title()} Analysis', 
+                     fontsize=self.config.font_size + 2, fontweight='bold')
+            plt.xlabel('Mean |SHAP Value|', fontsize=self.config.font_size)
+            
+            # Add grid for better readability
+            ax.grid(True, alpha=0.3, axis='x')
+            
+            plt.tight_layout()
+            
+            logger.info(f"Created SHAP bar plot for {explanation.explanation_type} explanation")
+            return fig
+            
+        except Exception as e:
+            logger.error(f"Failed to create SHAP bar plot: {str(e)}")
+            raise RuntimeError(f"SHAP bar plot creation failed: {str(e)}")
+    
     def create_waterfall_plot(self, explanation: SHAPExplanation, 
                             sample_idx: int = 0, **kwargs) -> plt.Figure:
         """Create SHAP waterfall plot for individual prediction explanation.

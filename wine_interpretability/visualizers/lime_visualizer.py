@@ -99,6 +99,14 @@ class LIMEVisualizer(BaseVisualizer):
         ax.text(0.02, 0.98, pred_text, transform=ax.transAxes, 
                 verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
         
+        # Add value labels on bars for better readability
+        for i, (bar, imp) in enumerate(zip(bars, importances)):
+            label_x = imp + (0.01 * max(abs(x) for x in importances))
+            if imp < 0:
+                label_x = imp - (0.01 * max(abs(x) for x in importances))
+            ax.text(label_x, i, f'{imp:.3f}', 
+                   va='center', ha='left' if imp >= 0 else 'right', fontsize=9)
+        
         plt.tight_layout()
         return fig
     
